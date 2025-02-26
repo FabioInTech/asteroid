@@ -7,10 +7,12 @@ const ship = {
   y: canvas.height / 2,
   size: 20,
   angle: 0,
-  speed: 0,
+  xv: 0, // x velocity
+  yv: 0, // y velocity
   thrust: 0.1,
+  friction: 0.99, // to slow down over time
   turnSpeed: 0.05,
-  color:"white",
+  color: "white",
 };
 
 const asteroids = [];
@@ -41,7 +43,7 @@ function createAsteroids() {
       size: asteroidSize,
       xv: Math.random() * 2 - 1,
       yv: Math.random() * 2 - 1,
-      color:"grey"
+      color: "grey"
     });
   }
 }
@@ -55,8 +57,8 @@ function drawShip(ship) {
 
   ctx.beginPath();
   ctx.moveTo(ship.size, 0);
-  ctx.lineTo(-ship.size, -ship.size/2);
-  ctx.lineTo(-ship.size, ship.size/2);
+  ctx.lineTo(-ship.size, -ship.size / 2);
+  ctx.lineTo(-ship.size, ship.size / 2);
   ctx.closePath();
 
   ctx.strokeStyle = ship.color;
@@ -80,28 +82,44 @@ function drawBullet(bullet) {
 
 // Update Functions
 function updateShip() {
+  // Thrust
   if (keys.up) {
-    ship.speed += ship.thrust;
+    ship.xv += ship.thrust * Math.cos(ship.angle);
+    ship.yv += ship.thrust * Math.sin(ship.angle);
   }
-  if (keys.down) {
-    ship.speed -= ship.thrust;
+    if (keys.down) {
+    ship.xv -= ship.thrust * Math.cos(ship.angle);
+    ship.yv -= ship.thrust * Math.sin(ship.angle);
   }
-  if(ship.speed > maxShipSpeed) ship.speed = maxShipSpeed;
-  if(ship.speed < -maxShipSpeed) ship.speed = -maxShipSpeed;
 
+  // Apply friction
+  ship.xv *= ship.friction;
+  ship.yv *= ship.friction;
+
+  // Limit speed
+  let speed = Math.sqrt(ship.xv * ship.xv + ship.yv * ship.yv);
+  if (speed > maxShipSpeed) {
+    ship.xv *= maxShipSpeed / speed;
+    ship.yv *= maxShipSpeed / speed;
+  }
+
+  // Turning
   if (keys.left) {
     ship.angle -= ship.turnSpeed;
   }
   if (keys.right) {
     ship.angle += ship.turnSpeed;
   }
-  if(keys.space){
-      fireBullet();
-      keys.space = false;
+
+  //Fire
+  if (keys.space) {
+    fireBullet();
+    keys.space = false;
   }
-    
-  ship.x += ship.speed * Math.cos(ship.angle);
-  ship.y += ship.speed * Math.sin(ship.angle);
+
+  // Update position based on velocity
+  ship.x += ship.xv;
+  ship.y += ship.yv;
 
   // Screen Wrap
   if (ship.x < 0) ship.x = canvas.width;
@@ -122,53 +140,55 @@ function updateAsteroids() {
   });
 }
 
-function updateBullets(){
-    bullets.forEach((bullet, index) => {
-        bullet.x += bullet.xv;
-        bullet.y += bullet.yv;
-        if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
-            bullets.splice(index, 1);
-        }
-      });
+function updateBullets() {
+  bullets.forEach((bullet, index) => {
+    bullet.x += bullet.xv;
+    bullet.y += bullet.yv;
+    if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
+      bullets.splice(index, 1);
+    }
+  });
 }
 
-function fireBullet(){
-    bullets.push({
-        x: ship.x + ship.size * Math.cos(ship.angle),
-        y: ship.y + ship.size * Math.sin(ship.angle),
-        xv: bulletSpeed * Math.cos(ship.angle),
-        yv: bulletSpeed * Math.sin(ship.angle),
-    })
+function fireBullet() {
+  bullets.push({
+    x: ship.x + ship.size * Math.cos(ship.angle),
+    y: ship.y + ship.size * Math.sin(ship.angle),
+    xv: bulletSpeed * Math.cos(ship.angle),
+    yv: bulletSpeed * Math.sin(ship.angle),
+  })
 }
 
 // Collision Detection
 function checkCollisions() {
-    for (let i = 0; i < asteroids.length; i++) {
-      const asteroid = asteroids[i];
-      const dx = ship.x - asteroid.x;
-      const dy = ship.y - asteroid.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-  
-      if (distance < ship.size + asteroid.size) {
-        // Collision with ship
-        // console.log("Colision ship")
-        // For now, we'll just reset the ship's position.
-        ship.x = canvas.width / 2;
-        ship.y = canvas.height / 2;
-      }
-      for(let b = 0; b < bullets.length; b++){
-        const bullet = bullets[b];
-        const bdx = bullet.x - asteroid.x;
-        const bdy = bullet.y - asteroid.y;
-        const bdistance = Math.sqrt(bdx * bdx + bdy * bdy);
-        if(bdistance < asteroid.size){
-            //console.log("colision bullet")
-            bullets.splice(b, 1);
-            asteroids.splice(i, 1);
-        }
+  for (let i = 0; i < asteroids.length; i++) {
+    const asteroid = asteroids[i];
+    const dx = ship.x - asteroid.x;
+    const dy = ship.y - asteroid.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance < ship.size + asteroid.size) {
+      // Collision with ship
+      // console.log("Colision ship")
+      // For now, we'll just reset the ship's position.
+      ship.x = canvas.width / 2;
+      ship.y = canvas.height / 2;
+      ship.xv = 0;
+      ship.yv = 0;
+    }
+    for (let b = 0; b < bullets.length; b++) {
+      const bullet = bullets[b];
+      const bdx = bullet.x - asteroid.x;
+      const bdy = bullet.y - asteroid.y;
+      const bdistance = Math.sqrt(bdx * bdx + bdy * bdy);
+      if (bdistance < asteroid.size) {
+        //console.log("colision bullet")
+        bullets.splice(b, 1);
+        asteroids.splice(i, 1);
       }
     }
   }
+}
 
 // Keyboard Handling
 document.addEventListener('keydown', (event) => {
@@ -176,9 +196,9 @@ document.addEventListener('keydown', (event) => {
     case 'ArrowUp':
       keys.up = true;
       break;
-    case 'ArrowDown':
-      keys.down = true;
-      break;
+      case 'ArrowDown':
+        keys.down = true;
+        break;
     case 'ArrowLeft':
       keys.left = true;
       break;
@@ -206,8 +226,8 @@ document.addEventListener('keyup', (event) => {
       keys.right = false;
       break;
     case ' ':
-        keys.space = false;
-        break;
+      keys.space = false;
+      break;
   }
 });
 
